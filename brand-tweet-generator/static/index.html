@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brand Tweet Generator</title>
+<style>
+  :root { --bg:#f6f7fb; --card:#fff; --text:#14171a; --muted:#657786; --line:#e1e8ed; --accent:#1d9bf0; --accent-d:#1a8cd8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1419; --card:#16202a; --text:#e7e9ea; --muted:#8b98a5; --line:#2f3b47; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.7rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  label { display:block; font-weight:600; font-size:.9rem; margin-bottom:4px; }
+  label span { font-weight:400; color: var(--muted); }
+  input, select, textarea { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--text); font: inherit; }
+  textarea { resize: vertical; min-height: 84px; }
+  .full { grid-column: 1 / -1; }
+  button.primary { background:var(--accent); color:#fff; border:0; padding:12px 22px; border-radius:999px; font-weight:700; font-size:1rem; cursor:pointer; }
+  button.primary:hover { background:var(--accent-d); }
+  button.primary:disabled { opacity:.6; cursor:wait; }
+  details { margin-top: 4px; }
+  summary { cursor:pointer; color: var(--accent); font-weight:600; font-size:.9rem; }
+  .error { background:#fdecea; color:#a1261b; border-radius:10px; padding:12px 14px; margin-bottom:16px; display:none; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin: 6px 0 10px; }
+  .chip { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); padding: 3px 10px; border-radius: 999px; font-size:.82rem; font-weight:600; }
+  ul.bullets { margin: 8px 0 0; padding-left: 20px; }
+  .tweet { border-bottom: 1px solid var(--line); padding: 14px 0; }
+  .tweet:last-child { border-bottom: 0; }
+  .meta { display:flex; justify-content:space-between; align-items:center; font-size:.8rem; color:var(--muted); margin-top:8px; }
+  .tag { text-transform: capitalize; font-weight:700; }
+  .tag.engaging { color:#7856ff; } .tag.promotional { color:#d9480f; } .tag.witty { color:#e0245e; } .tag.informative { color:#00a37a; }
+  .copy { background:none; border:1px solid var(--line); color:var(--text); border-radius:8px; padding:3px 10px; cursor:pointer; font-size:.8rem; }
+  .tweet p { margin:0; white-space: pre-wrap; font-size: 1.02rem; }
+  #results { display:none; }
+  h2 { font-size:1.1rem; margin:0 0 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Brand Tweet Generator</h1>
+  <p class="sub">Tell us about a brand. We analyse its voice, then write 10 on-brand tweets.</p>
+
+  <form id="form" class="card">
+    <div class="grid">
+      <div>
+        <label for="brand_name">Brand name <span>(optional)</span></label>
+        <input id="brand_name" maxlength="80" placeholder="e.g. Zomato">
+      </div>
+      <div>
+        <label for="industry">Industry / category <span>(optional)</span></label>
+        <input id="industry" maxlength="80" placeholder="e.g. Food delivery">
+      </div>
+      <div class="full">
+        <label for="objective">Campaign objective</label>
+        <select id="objective">
+          <option value="engagement">Engagement</option>
+          <option value="promotion">Promotion</option>
+          <option value="awareness">Awareness</option>
+          <option value="education">Education</option>
+          <option value="launch">Product launch</option>
+          <option value="community">Community building</option>
+        </select>
+      </div>
+      <div class="full">
+        <label for="products">About the brand's products <span>(a brand name or this is required)</span></label>
+        <textarea id="products" maxlength="1000" placeholder="What do they sell? Who is it for? Anything special?"></textarea>
+      </div>
+      <div class="full">
+        <details>
+          <summary>Advanced: paste some of the brand's real posts to learn its voice</summary>
+          <textarea id="sample_posts" maxlength="3000" style="margin-top:8px" placeholder="Paste 3-10 recent tweets or captions, one per line."></textarea>
+        </details>
+      </div>
+    </div>
+    <p style="margin:16px 0 0"><button class="primary" id="go" type="submit">Generate 10 tweets</button></p>
+  </form>
+
+  <div class="error" id="error"></div>
+
+  <div id="results">
+    <div class="card">
+      <h2>Brand voice summary</h2>
+      <div class="chips" id="tone"></div>
+      <ul class="bullets" id="bullets"></ul>
+      <p style="margin:12px 0 0;color:var(--muted);font-size:.9rem"><strong>Audience:</strong> <span id="aud"></span></p>
+      <p style="margin:4px 0 0;color:var(--muted);font-size:.9rem"><strong>Themes:</strong> <span id="themes"></span></p>
+    </div>
+    <div class="card">
+      <h2>Generated tweets</h2>
+      <div id="tweets"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function esc(s) { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; }
+
+$("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("error").style.display = "none";
+  $("results").style.display = "none";
+  const btn = $("go"); btn.disabled = true; btn.textContent = "Analysing voice and writing tweets...";
+  try {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        brand_name: $("brand_name").value, industry: $("industry").value,
+        objective: $("objective").value, products: $("products").value,
+        sample_posts: $("sample_posts").value
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const d = data.detail;
+      throw new Error(typeof d === "string" ? d : "Please check your inputs and try again.");
+    }
+    render(data);
+  } catch (err) {
+    $("error").textContent = err.message; $("error").style.display = "block";
+  } finally {
+    btn.disabled = false; btn.textContent = "Generate 10 tweets";
+  }
+});
+
+function render({ voice, tweets }) {
+  $("tone").innerHTML = (voice.tone || []).map(t => `<span class="chip">${esc(t)}</span>`).join("");
+  $("bullets").innerHTML = (voice.summary_bullets || []).map(b => `<li>${esc(b)}</li>`).join("");
+  $("aud").textContent = voice.target_audience || "";
+  $("themes").textContent = (voice.content_themes || []).join(", ");
+  $("tweets").innerHTML = tweets.map((t, i) => `
+    <div class="tweet">
+      <p>${esc(t.text)}</p>
+      <div class="meta">
+        <span><span class="tag ${t.style}">${t.style}</span> &middot; ${t.text.length}/280</span>
+        <button class="copy" data-i="${i}">Copy</button>
+      </div>
+    </div>`).join("");
+  document.querySelectorAll(".copy").forEach(b => b.onclick = async () => {
+    await navigator.clipboard.writeText(tweets[b.dataset.i].text);
+    b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy", 1200);
+  });
+  $("results").style.display = "block";
+  $("results").scrollIntoView({ behavior: "smooth" });
+}
+</script>
+</body>
+</html>
